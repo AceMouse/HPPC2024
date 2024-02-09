@@ -10,8 +10,9 @@ double R = N - S - I;  // Recovered and now immune
 double infection_rate = 1./5.;  // Beta
 double recovery_rate = 1./10.;  // Gamma
 
-double step_size = .5;
-double steps = 10000;
+int d = 1000; //steps pr day. 
+double step_size = 1./(double)d;
+int steps = 10000000;
 
 int main (int argc, char *argv[]) {
     FILE *outFile;
@@ -22,7 +23,9 @@ int main (int argc, char *argv[]) {
     double ir; 
     double frac = 1/N; //save on divisions
     while(steps-- && I>=1){
-        fprintf(outFile, "%.3f %.3f %.3f\n", S, I, R);
+        if ((steps % d) == 0) { // only write to file onece pr day. 
+            fprintf(outFile, "%.3f %.3f %.3f\n", S, I, R);
+        }
         is = infection_rate * I * S * frac;
         ir = recovery_rate * I;
         S -= is * step_size;
