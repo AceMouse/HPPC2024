@@ -1,6 +1,7 @@
 #include <iostream>
 #include <iomanip>
 #include <fstream>
+#include <ostream>
 #include <vector>
 #include <cassert>
 #include <math.h>
@@ -61,23 +62,6 @@ double dot(const Vec3& a, const Vec3& b){
     return a.x * b.x + a.y * b.y + a.z * b.z;
 }
 
-/* atom class */
-class Atom {
-public:
-    // The mass of the atom in (U)
-    double mass;
-    double ep;            // epsilon for LJ potential
-    double sigma;         // Sigma, somehow the size of the atom
-    double charge;        // charge of the atom (partial charge)
-    std::string name;     // Name of the atom
-    // the position in (nm), velocity (nm/ps) and forces (k_BT/nm) of the atom
-    Vec3 p,v,f;
-    // constructor, takes parameters and allocates p, v and f properly
-    Atom(double mass, double ep, double sigma, double charge, std::string name) 
-    : mass{mass}, ep{ep}, sigma{sigma}, charge{charge}, name{name}, p{0,0,0}, v{0,0,0}, f{0,0,0}
-    {}
-};
-
 /* a class for the bond between two atoms U = 0.5k(r12-L0)^2 */
 class Bond {
 public:
@@ -92,14 +76,6 @@ public:
     double K;
     double Phi0;
     int a1, a2, a3; // the indexes of the three atoms, with a2 being the centre atom
-};
-
-/* molecule class */
-class Molecule {
-public:
-    std::vector<Atom> atoms;          // list of atoms in the molecule
-    std::vector<Bond> bonds;          // the bond potentials, eg for water the left and right bonds
-    std::vector<Angle> angles;        // the angle potentials, for water just the single one, but keep it a list for generality
 };
 
 // ===============================================================================
@@ -120,7 +96,7 @@ public:
     // constructor, takes parameters and allocates p, v and f properly to have N_identical elements
     Atoms(double mass, double ep, double sigma, double charge, std::string name, size_t N_identical) 
     : mass{mass}, ep{ep}, sigma{sigma}, charge{charge}, name{name}, 
-      p{N_identical, {0,0,0}}, v{N_identical, {0,0,0}}, f{N_identical, {0,0,0}}
+    p{N_identical,{0,0,0}}, v{N_identical, {0,0,0}}, f{N_identical, {0,0,0}}
     {}
 };
 
@@ -139,7 +115,7 @@ public:
 /* system class */
 class System {
 public:
-    std::vector<Molecule> molecules;          // all the molecules in the system
+    Molecules molecules;          // all the molecules in the system
     double time = 0;                          // current simulation time
 };
 
@@ -183,61 +159,63 @@ public:
 
 // Given a bond, updates the force on all atoms correspondingly
 void UpdateBondForces(System& sys){
-    for (Molecule& molecule : sys.molecules)
+    Molecules& molecule = sys.molecules;
     // Loops over the (2 for water) bond constraints
     for (Bond& bond : molecule.bonds){
-        auto& atom1=molecule.atoms[bond.a1];
-        auto& atom2=molecule.atoms[bond.a2];
-
-        Vec3 dp  = atom1.p-atom2.p;
-        Vec3 f   = -bond.K*(1-bond.L0/dp.mag())*dp;
-        atom1.f += f;
-        atom2.f -= f; 
-        accumulated_forces_bond += f.mag();
+        auto& atom1s = molecule.atoms[bond.a1];
+        auto& atom2s = molecule.atoms[bond.a2];
+        for (int i = 0; i<molecule.no_mol; i++ ){
+            Vec3 dp  = atom1s.p[i]-atom2s.p[i];
+            Vec3 f   = -bond.K*(1-bond.L0/dp.mag())*dp;
+            atom1s.f[i] += f;
+            atom2s.f[i] -= f; 
+            accumulated_forces_bond += f.mag();
+        }
     }
 }
 
 // Iterates over all bonds in molecules (for water only 2: the left and right)
 // And updates forces on atoms correpondingly
 void UpdateAngleForces(System& sys){
-    for (Molecule& molecule : sys.molecules)
+    Molecules& molecule = sys.molecules;
     for (Angle& angle : molecule.angles){
-        //====  angle forces  (H--O---H bonds) U_angle = 0.5*k_a(phi-phi_0)^2
-        //f_H1 =  K(phi-ph0)/|H1O|*Ta
-        // f_H2 =  K(phi-ph0)/|H2O|*Tc
-        // f_O = -f1 - f2
-        // Ta = norm(H1O x (H1O x H2O))
-        // Tc = norm(H2O x (H2O x H1O))
-        //=============================================================
-        auto& atom1=molecule.atoms[angle.a1];
-        auto& atom2=molecule.atoms[angle.a2];
-        auto& atom3=molecule.atoms[angle.a3];
+        auto& atom1s = molecule.atoms[angle.a1];
+        auto& atom2s = molecule.atoms[angle.a2];
+        auto& atom3s = molecule.atoms[angle.a3];
+        for (int i = 0; i<molecule.no_mol; i++ ){
+            //====  angle forces  (H--O---H bonds) U_angle = 0.5*k_a(phi-phi_0)^2
+            //f_H1 =  K(phi-ph0)/|H1O|*Ta
+            // f_H2 =  K(phi-ph0)/|H2O|*Tc
+            // f_O = -f1 - f2
+            // Ta = norm(H1O x (H1O x H2O))
+            // Tc = norm(H2O x (H2O x H1O))
+            //=============================================================
+            Vec3 d21 = atom2s.p[i]-atom1s.p[i];     
+            Vec3 d23 = atom2s.p[i]-atom3s.p[i];    
 
-        Vec3 d21 = atom2.p-atom1.p;     
-        Vec3 d23 = atom2.p-atom3.p;    
+            // phi = d21 dot d23 / |d21| |d23|
+            double norm_d21 = d21.mag();
+            double norm_d23 = d23.mag();
+            double phi = acos(dot(d21, d23) / (norm_d21*norm_d23));
 
-        // phi = d21 dot d23 / |d21| |d23|
-        double norm_d21 = d21.mag();
-        double norm_d23 = d23.mag();
-        double phi = acos(dot(d21, d23) / (norm_d21*norm_d23));
+            // d21 cross (d21 cross d23)
+            Vec3 c21_23 = cross(d21, d23);
+            Vec3 Ta = cross(d21, c21_23);
+            Ta /= Ta.mag();
 
-        // d21 cross (d21 cross d23)
-        Vec3 c21_23 = cross(d21, d23);
-        Vec3 Ta = cross(d21, c21_23);
-        Ta /= Ta.mag();
+            // d23 cross (d23 cross d21) = - d23 cross (d21 cross d23) = c21_23 cross d23
+            Vec3 Tc = cross(c21_23, d23);
+            Tc /= Tc.mag();
 
-        // d23 cross (d23 cross d21) = - d23 cross (d21 cross d23) = c21_23 cross d23
-        Vec3 Tc = cross(c21_23, d23);
-        Tc /= Tc.mag();
+            Vec3 f1 = Ta*(angle.K*(phi-angle.Phi0)/norm_d21);
+            Vec3 f3 = Tc*(angle.K*(phi-angle.Phi0)/norm_d23);
 
-        Vec3 f1 = Ta*(angle.K*(phi-angle.Phi0)/norm_d21);
-        Vec3 f3 = Tc*(angle.K*(phi-angle.Phi0)/norm_d23);
+            atom1s.f[i] += f1;
+            atom2s.f[i] -= f1+f3;
+            atom3s.f[i] += f3;
 
-        atom1.f += f1;
-        atom2.f -= f1+f3;
-        atom3.f += f3;
-
-        accumulated_forces_angle += f1.mag() + f3.mag();
+            accumulated_forces_angle += f1.mag() + f3.mag();
+        }
     }
 }
 
@@ -247,27 +225,31 @@ void UpdateNonBondedForces(System& sys){
     /* nonbonded forces: only a force between atoms in different molecules
        The total non-bonded forces come from Lennard Jones (LJ) and coulomb interactions
        U = ep[(sigma/r)^12-(sigma/r)^6] + C*q1*q2/r */
-    for (long unsigned int i = 0;   i < sys.molecules.size(); i++)
-    for (long unsigned int j = i+1; j < sys.molecules.size(); j++)
-    for (auto& atom1 : sys.molecules[i].atoms)
-        for (auto& atom2 : sys.molecules[j].atoms){ // iterate over all pairs of atoms, similar as well as dissimilar
-            Vec3 dp = atom1.p-atom2.p;
+    for (size_t typei = 0; typei<sys.molecules.atoms.size(); typei++){
+        auto& atom1s = sys.molecules.atoms[typei];
+        for (size_t typej = 0; typej<sys.molecules.atoms.size(); typej++){
+            auto& atom2s = sys.molecules.atoms[typej];
+            for (int i = 0;   i < sys.molecules.no_mol; i++)
+            for (int j = i+1;   j < sys.molecules.no_mol; j++){
+                Vec3 dp = atom1s.p[i]-atom2s.p[j];
 
-            double r  = dp.mag();                   
-            double r2 = r*r;
-            double ep = sqrt(atom1.ep*atom2.ep); // ep = sqrt(ep1*ep2)
-            double sigma = 0.5*(atom1.sigma+atom2.sigma);  // sigma = (sigma1+sigma2)/2
-            double q1 = atom1.charge;
-            double q2 = atom2.charge;
+                double r  = dp.mag();       
+                double r2 = r*r;
+                double ep = sqrt(atom1s.ep*atom2s.ep); // ep = sqrt(ep1*ep2)
+                double sigma = 0.5*(atom1s.sigma+atom2s.sigma);  // sigma = (sigma1+sigma2)/2
+                double q1 = atom1s.charge;
+                double q2 = atom2s.charge;
 
-            double sir = sigma*sigma/r2; // crossection**2 times inverse squared distance
-            double KC = 80*0.7;          // Coulomb prefactor
-            Vec3 f = ep*(12*pow(sir,6)-6*pow(sir,3))*sir*dp + KC*q1*q2/(r*r2)*dp; // LJ + Coulomb forces
-            atom1.f += f;
-            atom2.f -= f;
+                double sir = sigma*sigma/r2; // crossection**2 times inverse squared distance
+                double KC = 80*0.7;          // Coulomb prefactor
+                Vec3 f = ep*(12*pow(sir,6)-6*pow(sir,3))*sir*dp + KC*q1*q2/(r*r2)*dp; // LJ + Coulomb forces
+                atom1s.f[i] += f;
+                atom2s.f[j] -= f;
 
-            accumulated_forces_non_bond += f.mag();
+                accumulated_forces_non_bond += f.mag();
+            }
         }
+    }
 }
 
 // integrating the system for one time step using Leapfrog symplectic integration
@@ -275,11 +257,11 @@ void Evolve(System &sys, Sim_Configuration &sc){
 
     // Kick velocities and zero forces for next update
     // Drift positions: Loop over molecules and atoms inside the molecules
-    for (Molecule& molecule : sys.molecules)
-    for (auto& atom : molecule.atoms){
-        atom.v += sc.dt/atom.mass*atom.f;    // Update the velocities
-        atom.f  = {0,0,0};                   // set the forces zero to prepare for next potential calculation
-        atom.p += sc.dt* atom.v;             // update position
+    for (auto& atomis : sys.molecules.atoms)
+    for (int j = 0; j < sys.molecules.no_mol; j++){
+        atomis.v[j] += sc.dt/atomis.mass*atomis.f[j];    // Update the velocities
+        atomis.f[j]  = {0,0,0};                          // set the forces zero to prepare for next potential calculation
+        atomis.p[j] += sc.dt* atomis.v[j];               // update position
     }
 
     // Update the forces on each particle based on the particles positions
@@ -304,46 +286,35 @@ System MakeWater(int N_molecules){
     const double L0 = 0.09584;
     const double angle = 104.45*deg2rad;    
 
-    //         mass    ep    sigma charge name
-    Atom Oatom(16, 0.65,    0.31, -0.82, "O");  // Oxygen atom
-    Atom Hatom1( 1, 0.18828, 0.238, 0.41, "H"); // Hydrogen atom
-    Atom Hatom2( 1, 0.18828, 0.238, 0.41, "H"); // Hydrogen atom
-
-    // bonds beetween first H-O and second H-O respectively
-    std::vector<Bond> waterbonds = {
-        { .K = 20000, .L0 = L0, .a1 = 0, .a2 = 1},
-        { .K = 20000, .L0 = L0, .a1 = 0, .a2 = 2}
-    };
-
-    // angle between H-O-H
-    std::vector<Angle> waterangle = {
-        { .K = 1000, .Phi0 = angle, .a1 = 1, .a2 = 0, .a3 = 2 }
-    };   
-
     System sys;
+    // bonds beetween first H-O and second H-O respectively
+    sys.molecules.bonds  = {{ .K = 20000, .L0 = L0, .a1 = 0, .a2 = 1},
+                            { .K = 20000, .L0 = L0, .a1 = 0, .a2 = 2}};
+    sys.molecules.angles = {{ .K = 1000, .Phi0 = angle, .a1 = 1, .a2 = 0, .a3 = 2 }};
+    sys.molecules.atoms  = {Atoms(16, 0.65,    0.31, -0.82, "O", N_molecules), 
+                            Atoms( 1, 0.18828, 0.238, 0.41, "H", N_molecules), 
+                            Atoms( 1, 0.18828, 0.238, 0.41, "H", N_molecules)};
     for (int i = 0; i < N_molecules; i++){
         Vec3 P0{i * 0.2, i * 0.2, 0};
-        Oatom.p  = {P0.x, P0.y, P0.z};
-        Hatom1.p = {P0.x+L0*sin(angle/2), P0.y+L0*cos(angle/2), P0.z};
-        Hatom2.p = {P0.x-L0*sin(angle/2), P0.y+L0*cos(angle/2), P0.z};
-        std::vector<Atom> atoms {Oatom, Hatom1, Hatom2};
-
-        sys.molecules.push_back({atoms, waterbonds, waterangle});
+        sys.molecules.atoms[0].p[i]={P0.x, P0.y, P0.z};
+        sys.molecules.atoms[1].p[i]={P0.x+L0*sin(angle/2), P0.y+L0*cos(angle/2), P0.z};
+        sys.molecules.atoms[2].p[i]={P0.x-L0*sin(angle/2), P0.y+L0*cos(angle/2), P0.z};
     }
-    
     // Store atoms, bonds and angles in Water class and return
+    sys.molecules.no_mol = N_molecules;
     return sys;
 }
 
 // Write the system configurations in the trajectory file.
 void WriteOutput(System& sys, std::ofstream& file){  
     // Loop over all atoms in model one molecule at a time and write out position
-    for (Molecule& molecule : sys.molecules)
-    for (auto& atom : molecule.atoms){
-        file << sys.time << " " << atom.name << " " 
-            << atom.p.x << " " 
-            << atom.p.y << " " 
-            << atom.p.z << '\n';
+    Molecules& molecule = sys.molecules;
+    for (int i = 0; i<molecule.no_mol; i++)
+    for (size_t j = 0; j < molecule.atoms.size(); j++){
+        file << sys.time << " " << molecule.atoms[j].name << " " 
+            << molecule.atoms[j].p[i].x << " " 
+            << molecule.atoms[j].p[i].y << " " 
+            << molecule.atoms[j].p[i].z << '\n';
     }
 }
 
