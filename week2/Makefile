@@ -11,9 +11,9 @@ OPT=-O3 -ffast-math
 OPT=-O1 -pg
 
 # Faster compilation time
-OPT=-O1
+#OPT=-O1
 
-CXXFLAGS := $(OPT) -Wall -march=znver1 -g -std=c++14
+CXXFLAGS := $(OPT) -Wall -march=native -g -std=c++14 
 
 default: seq vec
 
@@ -22,6 +22,7 @@ seq: Water_sequential.cpp
 
 vec: Water_vectorised.cpp
 	$(CXX) Water_vectorised.cpp $(CXXFLAGS) -fopenmp-simd -o vec
+
 
 clean:
 	rm -fr seq vec
