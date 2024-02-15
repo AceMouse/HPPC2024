@@ -217,9 +217,6 @@ void UpdateNonBondedForces(System& sys){
     /* nonbonded forces: only a force between atoms in different molecules
        The total non-bonded forces come from Lennard Jones (LJ) and coulomb interactions
        U = ep[(sigma/r)^12-(sigma/r)^6] + C*q1*q2/r */
-    std::vector<double> fxs(sys.molecules.no_mol);
-    std::vector<double> fys(sys.molecules.no_mol);
-    std::vector<double> fzs(sys.molecules.no_mol);
     for (size_t typei = 0; typei<sys.molecules.atoms.size(); typei++){
         auto& atom1s = sys.molecules.atoms[typei];
         for (size_t typej = 0; typej<sys.molecules.atoms.size(); typej++){
@@ -230,11 +227,23 @@ void UpdateNonBondedForces(System& sys){
             double const q1 = atom1s.charge;
             double const q2 = atom2s.charge;
             for (int i = 0;   i < sys.molecules.no_mol; i++){
-                #pragma omp simd
-                for (int j = i+1;   j < sys.molecules.no_mol; j++){
-                    double dpx = atom1s.px[i]-atom2s.px[j];
-                    double dpy = atom1s.py[i]-atom2s.py[j];
-                    double dpz = atom1s.pz[i]-atom2s.pz[j];
+                double x = 0;
+                double y = 0;
+                double z = 0;
+                double* pxs = &atom2s.px[0];
+                double* pys = &atom2s.py[0];
+                double* pzs = &atom2s.pz[0];
+                double* fxs = &atom2s.fx[0];
+                double* fys = &atom2s.fy[0];
+                double* fzs = &atom2s.fz[0];
+                double const pxi = atom1s.px[i];
+                double const pyi = atom1s.py[i];
+                double const pzi = atom1s.pz[i];
+                #pragma omp simd reduction(+:x,y,z,accumulated_forces_non_bond) linear(pxs,pys,pzs,fxs,fys,fzs)
+                for (int j = i+1; j < sys.molecules.no_mol; j++){
+                    double dpx = pxi-pxs[j];
+                    double dpy = pyi-pys[j];
+                    double dpz = pzi-pzs[j];
 
                     double r  = mag(dpx,dpy,dpz);       
                     double r2 = r*r;
@@ -248,22 +257,13 @@ void UpdateNonBondedForces(System& sys){
                     double fx = fac1*dpx + fac2*dpx; // LJ + Coulomb forces
                     double fy = fac1*dpy + fac2*dpy; 
                     double fz = fac1*dpz + fac2*dpz; 
-                    atom2s.fx[j] -= fx;
-                    atom2s.fy[j] -= fy;
-                    atom2s.fz[j] -= fz;
-                    fxs[j] = fx;
-                    fys[j] = fy;
-                    fzs[j] = fz;
-                }
-                double x = 0;
-                double y = 0;
-                double z = 0;
-                #pragma omp simd reduction(+:x,y,z,accumulated_forces_non_bond)
-                for (int j = i+1;   j < sys.molecules.no_mol; j++){
-                    x += fxs[j];
-                    y += fys[j];
-                    z += fzs[j];
-                    accumulated_forces_non_bond += mag(fxs[j],fys[j],fzs[j]);
+                    fxs[j] -= fx;
+                    fys[j] -= fy;
+                    fzs[j] -= fz;
+                    x += fx;
+                    y += fy;
+                    z += fz;
+                    accumulated_forces_non_bond += mag(fx,fy,fz);
                 }
                 atom1s.fx[i] += x;
                 atom1s.fy[i] += y;
