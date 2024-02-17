@@ -7,5 +7,6 @@ set ylabel 'sec'
 set xtics (2,4,16,128)
 set logscale x 2
 set logscale y 2
-plot for [col=2:3] 'perf.dat' using 1:col with lines title columnheader
+set key right bottom
+plot for [col=2:4] 'perf.dat' using 1:col with lines title columnheader lw 2
 
