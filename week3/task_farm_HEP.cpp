@@ -13,6 +13,7 @@
 #include <thread>
 #include <array>
 #include <vector>
+#include <stack>
 
 // To run an MPI program we always need to include the MPI headers
 #include <mpi.h>
@@ -124,6 +125,7 @@ double task_function(std::array<double,8>& setting, Data& ds) {
 }
 
 void master (int nworker, Data& ds) {
+    std::cout << " nworker " << nworker << std::endl;
     std::array<std::array<double,8>,n_cuts> ranges; // ranges for cuts to explore
 
     // loop over different event channels and set up cuts
@@ -150,20 +152,45 @@ void master (int nworker, Data& ds) {
 
     auto tstart = std::chrono::high_resolution_clock::now(); // start time (nano-seconds)
 
-    // ================================================================
-    /*
-    IMPLEMENT HERE THE CODE FOR THE MASTER
-    The master should pass a set of settings to a worker, and the worker should return the accuracy
-    */
+    // ===================/ Our implementation of master-worker /======================
 
-    // THIS CODE SHOULD BE REPLACED BY TASK FARM
-    // loop over all possible cuts and evaluate accuracy
-    for (long k=0; k<n_settings; k++)
-        accuracy[k] = task_function(settings[k], ds);
-    // THIS CODE SHOULD BE REPLACED BY TASK FARM
+    // initialize list of available workers
+    std::stack<int> avail_ws;
+    for (int w=1; w <= nworker; w++)  avail_ws.push(w);
+    
+    // start sending out tasks
+    int w; // current worker rank
+    double acc; // temp loc for computed acc
+    MPI_Status status;
+    std::vector<int> workers(nworker+1, 0); // vector of curr. k assigned to worker rank = index
+
+    for (long k = 0; k < n_settings; k++) {
+        
+        if (!avail_ws.empty()) {
+            w = avail_ws.top();   
+            avail_ws.pop();
+        }
+        else {
+            MPI_Recv(&acc, 1, MPI_DOUBLE, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, &status);
+            w = status.MPI_SOURCE;    
+            accuracy[workers[w]] = acc;
+        }
+        MPI_Send(settings[k].data(), 8, MPI_DOUBLE, w, 0, MPI_COMM_WORLD);
+        workers[w] = k;
+    }
+
+    // send termination signal, here tag=1
+    for (int w_count=0; w_count < nworker; w_count++) {
+        MPI_Recv(&acc, 1, MPI_DOUBLE, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, &status);
+        w = status.MPI_SOURCE;
+        accuracy[workers[w]] = acc;
+        MPI_Send(settings[0].data(), 8, MPI_DOUBLE, w, 1, MPI_COMM_WORLD);
+    }
+
     // ================================================================
 
     auto tend = std::chrono::high_resolution_clock::now(); // end time (nano-seconds)
+
     // diagnostics
     // extract index and value for best accuracy
     double best_accuracy_score=0;
@@ -188,10 +215,18 @@ void master (int nworker, Data& ds) {
 }
 
 void worker (int rank, Data& ds) {
-    /*
-    IMPLEMENT HERE THE CODE FOR THE WORKER
-    Use a call to "task_function" to complete a task and return accuracy to master.
-    */
+
+    std::array<double,8> set;
+    double acc;
+    MPI_Status status;
+    while (true) {  
+        MPI_Recv(&set, 8, MPI_DOUBLE, 0, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+        if (status.MPI_TAG == 1) break;
+        else {
+            acc = task_function(set, ds);
+            MPI_Send(&acc, 1, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD);
+        }
+    }
 }
 
 int main(int argc, char *argv[]) {
