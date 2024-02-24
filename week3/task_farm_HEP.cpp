@@ -1,8 +1,3 @@
-/*
-  Assignment: Make an MPI task farm for analysing HEP data
-  To "execute" a task, the worker computes the accuracy of a specific set of cuts.
-  The resulting accuracy should be send back from the worker to the master.
-*/
 
 #include <iostream>
 #include <sstream>

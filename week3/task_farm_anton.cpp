@@ -15,13 +15,11 @@
 // To run an MPI program we always need to include the MPI headers
 #include <mpi.h>
 
-const int NTASKS= 100; //5000;  // number of tasks
+const int NTASKS=5000;  // number of tasks
 const int RANDOM_SEED=1234;
 
 void master (int nworker) {
     std::array<int, NTASKS> task, result;
-    std::vector<int> workers(nworker+1, 0); // vector of curr. k assigned to worker rank = index
-
 
     // set up a random number generator
     std::random_device rd;
@@ -29,47 +27,51 @@ void master (int nworker) {
     std::default_random_engine engine;
     engine.seed(RANDOM_SEED);
     // make a distribution of random integers in the interval [0:30]
-    std::uniform_int_distribution<int> distribution(0, 1000);
+    std::uniform_int_distribution<int> distribution(0, 30);
 
-    // initialize list of tasks
-    for (int& t : task)   t = distribution(engine);  
+    for (int& t : task) {
+        t = distribution(engine);   // set up some "tasks"
+    }
 
-    // initialize list of available workers
-    std::stack<int> avail_ws;
-    for (int w=1; w <= nworker; w++)  avail_ws.push(w);
+    /*
+    IMPLEMENT HERE THE CODE FOR THE MASTER
+    ARRAY task contains tasks to be done. Send one element at a time to workers
+    ARRAY result should at completion contain the ranks of the workers that did
+    the corresponding tasks
+    */
 
-    // loop through tasks and send out to available workers
-    int w;
+    std::stack<int> workers;
+    for (int worker=1; worker <= nworker; worker++) {
+        workers.push(worker);
+    }
+
+    int resultIndex = 0;
     int data;
-    MPI_Status status;
-        
-    for (int tidx=0; tidx < NTASKS; tidx++) {
-        
-        if (!avail_ws.empty()) {
-            w = avail_ws.top();   
-            avail_ws.pop();
-        }
-        else {
+    for (int t : task) {
+        int w;
+        if (!workers.empty()) {
+            w = workers.top();
+            workers.pop();
+        } else {
+            MPI_Status status;
             MPI_Recv(&data, 1, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, &status);
-            w = data;    
-            result[workers[w]] = data;
+            result[resultIndex++] = data;
+            w = status.MPI_SOURCE;
         }
-        MPI_Send(&task[tidx], 1, MPI_INT, w, 0, MPI_COMM_WORLD);
-        workers[w] = tidx;
+        MPI_Send(&t, 1, MPI_INT, w, 0, MPI_COMM_WORLD);
     }
 
-    // send termination signal to all workers
-    for (int w_count=0; w_count < nworker; w_count++) {
+    for (int worker=1; worker<=nworker; worker++) {
+        MPI_Status status;
         MPI_Recv(&data, 1, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, &status);
-        w = data;
-        result[workers[w]] = data;
-        MPI_Send(&task[0], 1, MPI_INT, w, 1, MPI_COMM_WORLD);
+        result[resultIndex++] = data;
+        int terminate = -1;
+        MPI_Send(&terminate, 1, MPI_INT, status.MPI_SOURCE, 0, MPI_COMM_WORLD);
     }
-    
+
     // Print out a status on how many tasks were completed by each worker
     for (int worker=1; worker<=nworker; worker++) {
-        int tasksdone = 0; int workdone = 0; 
-        
+        int tasksdone = 0; int workdone = 0;
         for (int itask=0; itask<NTASKS; itask++)
         if (result[itask]==worker) {
             tasksdone++;
@@ -86,13 +88,18 @@ void task_function(int task) {
 }
 
 void worker (int rank) {
+    /*
+    IMPLEMENT HERE THE CODE FOR THE WORKER
+    Use a call to "task_function" to complete a task
+    */
+    while (true) {
+        int data;
+        MPI_Recv(&data, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     
-    int data = 0;
-    MPI_Status status;
-    while (true) {  
-        MPI_Recv(&data, 1, MPI_INT, 0, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-        if (status.MPI_TAG == 1) break;
+        if (data == -1) break;
+    
         task_function(data);
+    
         MPI_Send(&rank, 1, MPI_INT, 0, 0, MPI_COMM_WORLD);
     }
 }
@@ -111,3 +118,4 @@ int main(int argc, char *argv[]) {
 
     MPI_Finalize();      // shutdown MPI
 }
+
