@@ -227,6 +227,7 @@ DoubleVector propagator(std::vector<double> wave,
         wave_spectral_re[i] = half_wave[i];
         mean_wave += wave_spectral_re[i];
     }
+
     for (long i=nfreq; i < 2*nfreq; i++) { //vectorised
         wave_spectral_re[i] = half_wave[2*nfreq-i];
         mean_wave += wave_spectral_re[i];
@@ -245,7 +246,7 @@ DoubleVector propagator(std::vector<double> wave,
 
     // spectrum U of upgoing waves just below the surface.
      // See eq. (43) and (44) in Ganley (1981).
-
+    #pragma omp parallel for  
     for (long i=0; i < nfreq+1; i++) { // not vectorised: reason = inner loop
         Complex omega{0, 2*M_PI*i*dF};
         Complex exp_omega = exp( - dT * omega);
