@@ -17,7 +17,7 @@
 // ======================================================
 // The number of frequencies sets the cost of the problem
 const long NTHREADS=1;            // number of threads
-const long NFREQ=64*1024;         // number of frequencies per core
+const long NFREQ=1024*1024;         // number of frequencies per core
 const long nfreq=NFREQ*NTHREADS;  // frequencies in spectrum
 
 // ======================================================
@@ -80,7 +80,7 @@ typedef std::complex<double> Complex;
 //typedef std::vector<double, NUMA_Allocator<double>> DoubleVector;
 
 // Use standard allocator
-typedef std::vector<Complex> ComplexVector;
+//typedef std::vector<Complex> ComplexVector;
 typedef std::vector<double> DoubleVector;
 
 // Initialize Basic Constants
@@ -101,40 +101,68 @@ std::vector<double> read_txt_file(std::string fname) {
 }
 
 // Cooley–Tukey FFT (in-place computation)
-void fft(std::vector<Complex>& x)
+void fft(std::vector<double>& x_re_vec, std::vector<double>& x_im_vec)
 {
-	const long N = x.size();
+	const long N = x_re_vec.size();
 	if (N <= 1) return;
 
+    double* x_re = &x_re_vec[0];
+    double* x_im = &x_im_vec[0];
 	// divide
-	std::vector<Complex> even(N/2), odd(N/2);
-	for (long i=0; i<N/2; i++) {
-	    even[i] = x[2*i];
-	    odd[i]  = x[2*i+1];
+	std::vector<double> even_re_vec(N/2),even_im_vec(N/2), odd_re_vec(N/2), odd_im_vec(N/2);
+    double* even_re = &even_re_vec[0];
+    double* even_im = &even_im_vec[0];
+    double* odd_re = &odd_re_vec[0];
+    double* odd_im = &odd_im_vec[0];
+    #pragma GCC ivdep
+	for (long i=0; i<N/2; i++) {//vectorised
+	    even_im[i] = x_im[2*i];
+	    even_re[i] = x_re[2*i];
+	    odd_im[i]  = x_im[2*i+1];
+	    odd_re[i]  = x_re[2*i+1];
 	}
 
 	// conquer
-	fft(even);
-	fft(odd);
+	fft(even_re_vec, even_im_vec);
+	fft(odd_re_vec, odd_im_vec);
 
+    std::vector<double> p_re_vec(N/2), p_im_vec(N/2);
+    double* p_re = &p_re_vec[0];
+    double* p_im = &p_im_vec[0];
 	// combine
-	for (long k = 0; k < N/2; k++)
-	{
-		Complex t = std::polar(1.0, -2 * M_PI * k / N) * odd[k];
-		x[k    ] = even[k] + t;
-		x[k+N/2] = even[k] - t;
+	for (long k = 0; k < N/2; k++) { //not vectorised: reason = sin and cos 
+        double theta = -2 * M_PI * k / N;
+        p_re[k] = cos(theta);
+        p_im[k] = sin(theta);
+    }
+    #pragma omp simd linear(odd_re, odd_im, even_re, even_im, p_re, p_im)
+	for (long k = 0; k < N/2; k++) { //vectorised
+		double t_re = p_re[k] * odd_re[k]-p_im[k]*odd_im[k];
+		double t_im = p_re[k] * odd_im[k]+p_im[k]*odd_re[k];
+        x_re[k    ] = even_re[k] + t_re;
+		x_im[k    ] = even_im[k] + t_im;
+		x_re[k+N/2] = even_re[k] - t_re;
+		x_im[k+N/2] = even_im[k] - t_im;
 	}
 }
 
 // inverse fft (in-place)
-void ifft(std::vector<Complex>& x)
+void ifft(std::vector<double>& x_re_vec, std::vector<double>& x_im_vec)
 {
-    double inv_size = 1.0 / x.size();
-    for (auto& xx: x) xx = std::conj(xx); // conjugate the input
-	fft(x);  	   // forward fft
-    for (auto& xx: x) 
-        xx = std::conj(xx)  // conjugate the output
-            * inv_size;     // scale the numbers
+	const long N = x_re_vec.size();
+
+    double* x_re = &x_re_vec[0];
+    double* x_im = &x_im_vec[0];
+    double inv_size = 1.0 / N;
+    for (int i = 0; i<N; i++){ //vectorised
+        x_im[i] = -x_im[i]; 
+    }
+	fft(x_re_vec, x_im_vec);  	   // forward fft
+    #pragma GCC ivdep
+    for (int i = 0; i<N; i++) { //vectorised
+        x_im[i] = -x_im[i] * inv_size;
+        x_re[i] =  x_re[i] * inv_size; 
+    }
 }
 
 // Main routine: propgate wave through layers and compute seismogram
@@ -143,13 +171,17 @@ DoubleVector propagator(std::vector<double> wave,
                         std::vector<double> velocity) {
     const long nlayers = density.size();
     std::vector<double> imp(nlayers);      // impedance
-    std::vector<double> ref(nlayers-1);    // reflection coefficient
-    ComplexVector half_filter(nfreq/2+1,1); // half filter
-    ComplexVector filter(nfreq+1);  // full filter
+    std::vector<double> ref_vec(nlayers-1);    // reflection coefficient
+    double* ref = &ref_vec[0];
+    std::vector<double> half_filter_re(nfreq/2+1,1); // half filter
+    std::vector<double> filter_re(nfreq+1);  // full filter
     DoubleVector half_wave(nfreq+1,0); // half wave
-    ComplexVector wave_spectral(nsamp); // FFT(wave)
-    ComplexVector U(nfreq+1,0);     // Upgoing waves
-    ComplexVector Upad(nsamp,0);    // FFT(seismogram)
+    std::vector<double> wave_spectral_re(nsamp); // FFT(wave)
+    std::vector<double> wave_spectral_im(nsamp); // FFT(wave)
+    std::vector<double> U_re(nfreq+1,0);     // Upgoing waves
+    std::vector<double> U_im(nfreq+1,0);     // Upgoing waves
+    std::vector<double> Upad_re(nsamp,0);    // FFT(seismogram)
+    std::vector<double> Upad_im(nsamp,0);    // FFT(seismogram)
     DoubleVector seismogram(nsamp); // final seismogram
 
     long n_wave = wave.size();             // size of wave array
@@ -162,78 +194,97 @@ DoubleVector propagator(std::vector<double> wave,
     
 
         // Compute seismic impedance
-    for (long i=0; i < nlayers; i++)
+    #pragma GCC ivdep
+    for (long i=0; i < nlayers; i++){ //vectorised
         imp[i] = density[i] * velocity[i];
+    }
     
     // Reflection coefficients at the base of the layers :
-    for (long i=0; i < nlayers-1; i++)
+    for (long i=0; i < nlayers-1; i++){ //vectorised
         ref[i] = (imp[i+1] - imp[i])/(imp[i+1] + imp[i]);
+    }
 
     // Spectral window (both low- and high cut)
-    for (long i=0; i < lc+1; i++)
-        half_filter[i]= (sin(M_PI*(2*i-lc)/(2*lc)))/2+0.5;
+    for (long i=0; i < lc+1; i++) {//not vectorised: reason = sin 
+        half_filter_re[i]= (sin(M_PI*(2*i-lc)/(2*lc)))/2+0.5;
+    }
 
-    for (long i=0; i < nfreq/2+1; i++)
-        filter[i] = half_filter[i];
+    for (long i=0; i < nfreq/2+1; i++) { //vectorised
+        filter_re[i] = half_filter_re[i];
+    }
 
-    filter[nfreq/2+1] = 1;
+    filter_re[nfreq/2+1] = 1;
 
-    for (long i=nfreq/2+2; i < nfreq+1; i++)
-        filter[i] = half_filter[nfreq+1-i];
+    for (long i=nfreq/2+2; i < nfreq+1; i++) { //vectorised
+        filter_re[i] = half_filter_re[nfreq+1-i];
+    }
 
-    for (long i=0; i < n_wave/2; i++)
+    for (long i=0; i < n_wave/2; i++) { //vectorised
         half_wave[i] = wave[n_wave/2-1+i];
+    }
 
-    for (long i=0; i < 2*nfreq; i++) {
-        if (i < nfreq) {
-            wave_spectral[i] = half_wave[i];
-        } else {
-            wave_spectral[i] = half_wave[2*nfreq-i];
-        }
-        mean_wave += std::real(wave_spectral[i]);
+    for (long i=0; i < nfreq; i++) { //vectorised
+        wave_spectral_re[i] = half_wave[i];
+        mean_wave += wave_spectral_re[i];
+    }
+    for (long i=nfreq; i < 2*nfreq; i++) { //vectorised
+        wave_spectral_re[i] = half_wave[2*nfreq-i];
+        mean_wave += wave_spectral_re[i];
     }
 
     mean_wave = mean_wave / nsamp;
 
-    for (long i=0.; i < 2*nfreq; i++)
-        wave_spectral[i] -= mean_wave;
+    for (long i=0; i < 2*nfreq; i++){ //vectorised
+        wave_spectral_re[i] -= mean_wave;
+    }
 
     // Fourier transform waveform to frequency domain
     tstart1 = std::chrono::high_resolution_clock::now(); // start time (nano-seconds)
-    fft(wave_spectral);
+    fft(wave_spectral_re, wave_spectral_im);
     tend1 = std::chrono::high_resolution_clock::now(); // end time (nano-seconds)
 
     // spectrum U of upgoing waves just below the surface.
-    // See eq. (43) and (44) in Ganley (1981).
+     // See eq. (43) and (44) in Ganley (1981).
 
-    for (long i=0; i < nfreq+1; i++) {
+    for (long i=0; i < nfreq+1; i++) { // not vectorised: reason = inner loop
         Complex omega{0, 2*M_PI*i*dF};
         Complex exp_omega = exp( - dT * omega);
         Complex Y = 0;
-        for (long n=nlayers-2; n > -1; n--)
+        for (long n=nlayers-2; n > -1; n--){ // not vectorised: reason = Y_n+1 depends on Y_n
             Y = exp_omega * (ref[n] + Y) / (1.0 + ref[n]*Y);
-        U[i] = Y;
+        }
+        U_re[i] = Y.real();
+        U_im[i] = Y.imag();
     }
 
     // Compute seismogram
-    for (long i=0; i < nfreq+1; i++) {
-        U[i] *= filter[i];
-        Upad[i] = U[i];
+    for (long i=0; i < nfreq+1; i++) { //vectorised
+//(ac - bd) + i(ad + bc)
+        U_re[i] = U_re[i]*filter_re[i]; 
+        U_im[i] = U_im[i]*filter_re[i]; 
+        Upad_re[i] = U_re[i];
+        Upad_im[i] = U_im[i];
     }
 
-    for (long i=nfreq+1; i < nsamp; i++)
-        Upad[i] = std::conj(Upad[nsamp - i]);
+    for (long i=nfreq+1; i < nsamp; i++){ //vectorised
+        Upad_re[i] = Upad_re[nsamp - i];
+        Upad_im[i] = -Upad_im[nsamp - i];
+    }
 
-    for (long i=0; i < nsamp; i++)
-        Upad[i] *= wave_spectral[i];
+    for (long i=0; i < nsamp; i++){ //vectorised
+        Upad_re[i] =Upad_re[i]*wave_spectral_re[i]-Upad_im[i]*wave_spectral_im[i];
+        Upad_im[i] =Upad_re[i]*wave_spectral_im[i]+Upad_im[i]*wave_spectral_re[i];
+    }
     
     // Fourier transform back again
     tstart2 = std::chrono::high_resolution_clock::now(); // start time (nano-seconds)
-    ifft(Upad);
+    ifft(Upad_re, Upad_im);
     tend2 = std::chrono::high_resolution_clock::now(); // end time (nano-seconds)
 
-    for (long i=0; i < nsamp; i++)
-        seismogram[i] = std::real(Upad[i]);
+    #pragma GCC ivdep
+    for (long i=0; i < nsamp; i++){ //vectorised
+        seismogram[i] = Upad_re[i];
+    }
 
     auto tend = std::chrono::high_resolution_clock::now(); // end time (nano-seconds)
 

@@ -1,81 +1,26 @@
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="">
-    <meta name="author" content="martin.mortensen@adm.ku.dk">
-    <link rel="shortcut icon" href="/assets/ico/favicon.png">
+#!/usr/bin/env bash
+#SBATCH --job-name=Seismogram
+#SBATCH --partition=modi_HPPC
+#SBATCH --nodes=1 --ntasks=1 --threads-per-core=1
+#SBATCH --cpus-per-task=1
+#SBATCH --exclusive
 
-    <title>Login</title>
+# set loop scheduling to static
+export OMP_SCHEDULE=static
 
-    <!-- Bootstrap core CSS -->
-    <link href="/bootstrap/css/bootstrap.css" rel="stylesheet">
+# Schedule one thread per core. Change to "threads" for hyperthreading
+export OMP_PLACES=cores
+#export OMP_PLACES=threads
 
-    <!-- Custom styles for this template -->
-    <link href="/assets/css/signin.css" rel="stylesheet">
-    <link href="/assets/css/ku-login.css" rel="stylesheet">
-    <link href="/assets/css/bootstrap-sticky-footer.css" rel="stylesheet">
+# Place threads as close to each other as possible
+export OMP_PROC_BIND=close
 
-    <!-- HTML5 shim and Respond.js IE8 support of HTML5 elements and media queries -->
-    <!--[if lt IE 9]>
-      <script src="/assets/js/html5shiv.js"></script>
-      <script src="/assets/js/respond.min.js"></script>
-    <![endif]-->
-  </head>
+# Set and print number of cores / threads to use
+export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
+echo Number of threads=$OMP_NUM_THREADS
 
-  <body>
+# uncomment to write info about binding and environment variables to screen
+#export OMP_DISPLAY_ENV=true
 
-   <div class="main bg">
-    <div class="container" id="login">
-     <div class="content">
+apptainer exec ~/modi_images/ucphhpc/hpc-notebook:latest ./mp
 
-
-
-      <form class="form-signin" action="https://openid.ku.dk/processTrustResult" method="POST">
-        
-        <h3 class="form-signin-heading">KU OpenID</h3>
-        <input type="text" class="form-control" placeholder="KU username" autofocus required name="user">
-        <input type="password" class="form-control" placeholder="password" name="pwd" required autocomplete="off">
-        
-        
-        <label class="checkbox">
-          <input type="checkbox" value="remember-me" name="remember-me" checked> Remember Trust
-        </label>
-        <div class="btn-group">
-          <button class="btn btn btn-success" type="submit" name="allow">Yes (Allow)</button>
-          <button class="btn btn btn-danger " type="submit" name="cancel">No (Cancel)</button>
-        </div>
-        
-        <input type="hidden" name="ct" value="70efabe1d7ec232b4aa6f3a9d2fc0a2c6144dde1">
-      </form>
-
-     </div> <!-- /content -->
-     <div class="page-content">
-
-    <hr/>
-
-
-
-  <!-- Trust root has been validated by OpenID 2 mechanism. -->
-<div class="alert info-alert">
-  <p>The site <tt>https://erda.dk/</tt> has requested verification
-  of your OpenID.</p>
-  
-</div>
-
-
-
-
-
-     </div> <!-- /page-content -->
-    </div> <!-- /container -->
-   </div> <!-- /main bg -->
-
-    <!-- jQuery (necessary for Bootstrap's JavaScript plugins) -->
-    <script src="/assets/js/jquery.js"></script>
-    <!-- Include all compiled plugins (below), or include individual files as needed -->
-    <script src="/assets/bootstrap/js/bootstrap.min.js"></script>
-
-  </body>
-</html>

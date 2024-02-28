@@ -1,81 +1,29 @@
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="">
-    <meta name="author" content="martin.mortensen@adm.ku.dk">
-    <link rel="shortcut icon" href="/assets/ico/favicon.png">
+CXX := clang++-12
+CXX := g++ 
 
-    <title>Login</title>
+#######################################################
+# Optimization flags are chosen as the last definition.
+# Comment out using "#" at the begining of the line or rearrange according to your needs.
+#
+# Fastest executable (-ffast-math removes checking for NaNs and other things)
+OPT=-O3 -ffast-math
 
-    <!-- Bootstrap core CSS -->
-    <link href="/bootstrap/css/bootstrap.css" rel="stylesheet">
+# Add thread checking to code
+#OPT=-O1 -fsanitize=thread -fPIE -pie
 
-    <!-- Custom styles for this template -->
-    <link href="/assets/css/signin.css" rel="stylesheet">
-    <link href="/assets/css/ku-login.css" rel="stylesheet">
-    <link href="/assets/css/bootstrap-sticky-footer.css" rel="stylesheet">
+# Faster compilation time
+#OPT=-O1
 
-    <!-- HTML5 shim and Respond.js IE8 support of HTML5 elements and media queries -->
-    <!--[if lt IE 9]>
-      <script src="/assets/js/html5shiv.js"></script>
-      <script src="/assets/js/respond.min.js"></script>
-    <![endif]-->
-  </head>
+CXXFLAGS := $(OPT) -Wall -march=native -g -std=c++14
 
-  <body>
+default: seq mp
 
-   <div class="main bg">
-    <div class="container" id="login">
-     <div class="content">
+seq: seismogram_seq.cpp
+	$(CXX) seismogram_seq.cpp $(CXXFLAGS) -o seq
 
+mp: seismogram_omp.cpp
+	$(CXX) seismogram_omp.cpp $(CXXFLAGS) -fopenmp -o mp
 
+clean:
+	rm -fr seq mp
 
-      <form class="form-signin" action="https://openid.ku.dk/processTrustResult" method="POST">
-        
-        <h3 class="form-signin-heading">KU OpenID</h3>
-        <input type="text" class="form-control" placeholder="KU username" autofocus required name="user">
-        <input type="password" class="form-control" placeholder="password" name="pwd" required autocomplete="off">
-        
-        
-        <label class="checkbox">
-          <input type="checkbox" value="remember-me" name="remember-me" checked> Remember Trust
-        </label>
-        <div class="btn-group">
-          <button class="btn btn btn-success" type="submit" name="allow">Yes (Allow)</button>
-          <button class="btn btn btn-danger " type="submit" name="cancel">No (Cancel)</button>
-        </div>
-        
-        <input type="hidden" name="ct" value="f9b83ec1011772a69b8048cfba68b9f227d528fe">
-      </form>
-
-     </div> <!-- /content -->
-     <div class="page-content">
-
-    <hr/>
-
-
-
-  <!-- Trust root has been validated by OpenID 2 mechanism. -->
-<div class="alert info-alert">
-  <p>The site <tt>https://erda.dk/</tt> has requested verification
-  of your OpenID.</p>
-  
-</div>
-
-
-
-
-
-     </div> <!-- /page-content -->
-    </div> <!-- /container -->
-   </div> <!-- /main bg -->
-
-    <!-- jQuery (necessary for Bootstrap's JavaScript plugins) -->
-    <script src="/assets/js/jquery.js"></script>
-    <!-- Include all compiled plugins (below), or include individual files as needed -->
-    <script src="/assets/bootstrap/js/bootstrap.min.js"></script>
-
-  </body>
-</html>
