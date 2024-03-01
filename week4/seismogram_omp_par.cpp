@@ -115,13 +115,16 @@ void fft(std::vector<Complex>& x)
 	    even[i] = x[2*i];
 	    odd[i]  = x[2*i+1];
 	}
-
-    #pragma omp task shared(even) if(N > 1000)
-    fft(even);
-    #pragma omp task shared(odd) if(N > 1000)
-    fft(odd);
-    #pragma omp taskwait
-
+    if(N > 10000){
+        #pragma omp task shared(even) 
+        fft(even);
+        #pragma omp task shared(odd)
+        fft(odd);
+        #pragma omp taskwait
+    }else {
+        fft(even);
+        fft(odd);
+    }
 	// combine
 	for (long k = 0; k < N/2; k++)
 	{
