@@ -20,7 +20,7 @@
 // ======================================================
 // The number of frequencies sets the cost of the problem
 const long NTHREADS=1;            // number of threads
-const long NFREQ=64*1024;         // number of frequencies per core
+const long NFREQ=1024*1024;         // number of frequencies per core
 const long nfreq=NFREQ*NTHREADS;  // frequencies in spectrum
 
 // ======================================================
@@ -108,19 +108,20 @@ void fft(std::vector<Complex>& x)
 {
 	const long N = x.size();
 	if (N <= 1) return;
-
+    
 	// divide
 	std::vector<Complex> even(N/2), odd(N/2);
-    
     for (long i=0; i<N/2; i++) {
 	    even[i] = x[2*i];
 	    odd[i]  = x[2*i+1];
 	}
-    
-	// conquer
+
+    #pragma omp task shared(even) if(N > 1000)
     fft(even);
+    #pragma omp task shared(odd) if(N > 1000)
     fft(odd);
-    
+    #pragma omp taskwait
+
 	// combine
 	for (long k = 0; k < N/2; k++)
 	{
@@ -128,14 +129,21 @@ void fft(std::vector<Complex>& x)
 		x[k    ] = even[k] + t;
 		x[k+N/2] = even[k] - t;
 	}
+    
 }
 
 // inverse fft (in-place)
 void ifft(std::vector<Complex>& x)
 {
     double inv_size = 1.0 / x.size();
+    
+    #pragma omp for
     for (auto& xx: x) xx = std::conj(xx); // conjugate the input
+
+    #pragma omp single
 	fft(x);  	   // forward fft
+
+    #pragma omp for
     for (auto& xx: x) 
         xx = std::conj(xx)  // conjugate the output
             * inv_size;     // scale the numbers
@@ -166,38 +174,39 @@ DoubleVector propagator(std::vector<double> wave,
     
 
     // Compute seismic impedance
-    #pragma omp parallel
-    {
         
-    #pragma omp for
+    #pragma omp simd
     for (long i=0; i < nlayers; i++)
         imp[i] = density[i] * velocity[i];
         
     // Reflection coefficients at the base of the layers :
-    #pragma omp task
+    #pragma omp simd
     for (long i=0; i < nlayers-1; i++)
         ref[i] = (imp[i+1] - imp[i])/(imp[i+1] + imp[i]);
-    
+
     // Spectral window (both low- and high cut)
-    #pragma omp task
+    // should we parallelize or is it too small?
     for (long i=0; i < lc+1; i++)
         half_filter[i]= (sin(M_PI*(2*i-lc)/(2*lc)))/2+0.5;
-    #pragma omp barrier
+
+    #pragma omp parallel
+    {
         
-    #pragma omp task
+    #pragma omp for nowait
     for (long i=0; i < nfreq/2+1; i++)
         filter[i] = half_filter[i];
 
     #pragma omp single nowait
     filter[nfreq/2+1] = 1;
 
-    #pragma omp task
+    #pragma omp for nowait
     for (long i=nfreq/2+2; i < nfreq+1; i++)
         filter[i] = half_filter[nfreq+1-i];
 
-    #pragma omp task
+    #pragma omp single nowait
     for (long i=0; i < n_wave/2; i++)
         half_wave[i] = wave[n_wave/2-1+i];
+        
     #pragma omp barrier   
     
     #pragma omp for reduction(+:mean_wave)
@@ -213,10 +222,9 @@ DoubleVector propagator(std::vector<double> wave,
     #pragma omp single
     mean_wave = mean_wave / nsamp;
 
-    #pragma omp for
+    #pragma omp single
     for (long i=0.; i < 2*nfreq; i++)
         wave_spectral[i] -= mean_wave;
-
     
     // Fourier transform waveform to frequency domain
     #pragma omp single nowait
@@ -239,6 +247,8 @@ DoubleVector propagator(std::vector<double> wave,
         U[i] = Y;
     }
 
+    #pragma omp barrier
+        
     // Compute seismogram
     #pragma omp for
     for (long i=0; i < nfreq+1; i++) {
@@ -250,23 +260,20 @@ DoubleVector propagator(std::vector<double> wave,
     for (long i=nfreq+1; i < nsamp; i++)
         Upad[i] = std::conj(Upad[nsamp - i]);
 
-    #pragma omp barrier
     #pragma omp for
     for (long i=0; i < nsamp; i++)
         Upad[i] *= wave_spectral[i];
 
-    #pragma omp single
-    {
+    
     // Fourier transform back again
     tstart2 = std::chrono::high_resolution_clock::now(); // start time (nano-seconds)
     ifft(Upad);
     tend2 = std::chrono::high_resolution_clock::now(); // end time (nano-seconds)
-    }
-    
+
+        
     #pragma omp for
     for (long i=0; i < nsamp; i++)
         seismogram[i] = std::real(Upad[i]);
-    
     }
     
     auto tend = std::chrono::high_resolution_clock::now(); // end time (nano-seconds)
