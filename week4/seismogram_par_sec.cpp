@@ -115,6 +115,7 @@ void fft(std::vector<double>& x_re_vec, std::vector<double>& x_im_vec)
     double* odd_re = &odd_re_vec[0];
     double* odd_im = &odd_im_vec[0];
 
+    #pragma omp parallel for if(N>1000)
     for (long i=0; i<N/2; i++) {//vectorised
         even_im[i] = x_im[2*i];
         even_re[i] = x_re[2*i];
@@ -154,14 +155,19 @@ void ifft(std::vector<double>& x_re_vec, std::vector<double>& x_im_vec)
     double* x_re = &x_re_vec[0];
     double* x_im = &x_im_vec[0];
     double inv_size = 1.0 / N;
-    for (int i = 0; i<N; i++){ //vectorised
-        x_im[i] = -x_im[i]; 
-    }
-	fft(x_re_vec, x_im_vec);  	   // forward fft
-    #pragma GCC ivdep
-    for (int i = 0; i<N; i++) { //vectorised
-        x_im[i] = -x_im[i] * inv_size;
-        x_re[i] =  x_re[i] * inv_size; 
+//#pragma omp parallel
+    {
+//#pragma omp for
+        for (int i = 0; i<N; i++){ //vectorised
+            x_im[i] = -x_im[i]; 
+        }
+        fft(x_re_vec, x_im_vec);  	   // forward fft
+//        #pragma GCC ivdep
+//#pragma omp for
+        for (int i = 0; i<N; i++) { //vectorised
+            x_im[i] = -x_im[i] * inv_size;
+            x_re[i] =  x_re[i] * inv_size; 
+        }
     }
 }
 
@@ -245,6 +251,9 @@ DoubleVector propagator(std::vector<double> wave,
             for (long i=0; i < 2*nfreq; i++){ //vectorised
                 wave_spectral_re[i] -= mean_wave;
             }
+        }
+        #pragma omp single
+        {
             tstart1 = std::chrono::high_resolution_clock::now(); // start time (nano-seconds)
             // Fourier transform waveform to frequency domain
             fft(wave_spectral_re, wave_spectral_im);
