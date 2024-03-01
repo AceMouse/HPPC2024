@@ -20,7 +20,7 @@
 // ======================================================
 // The number of frequencies sets the cost of the problem
 const long NTHREADS=1;            // number of threads
-const long NFREQ=1024*1024;         // number of frequencies per core
+const long NFREQ=1024*1024;        // number of frequencies per core
 const long nfreq=NFREQ*NTHREADS;  // frequencies in spectrum
 
 // ======================================================
