@@ -14,9 +14,9 @@ OPT=-O3 -ffast-math
 # Faster compilation time
 #OPT=-O1
 
-CXXFLAGS := $(OPT) -Wall -march=native -g -pg -std=c++14
+CXXFLAGS := $(OPT) -Wall -march=native -std=c++14
 
-default: seq mp mpnc mpps
+default: seq mp mpnc mpps mp_par 
 
 seq: seismogram_seq.cpp
 	$(CXX) seismogram_seq.cpp $(CXXFLAGS) -o seq
@@ -30,6 +30,9 @@ mpnc: seismogram_no_complex_omp_vec.cpp
 mpps: seismogram_par_sec.cpp
 	$(CXX) seismogram_par_sec.cpp $(CXXFLAGS) -fopenmp -o mpps 
 
+mp_par: seismogram_omp_par.cpp
+	$(CXX) seismogram_omp_par.cpp $(CXXFLAGS) -fopenmp -o mp_par 
+
 clean:
-	rm -fr seq mp mpnc mpps 
+	rm -fr seq mp mpnc mpps mp_par  
 
