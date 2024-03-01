@@ -115,7 +115,7 @@ void fft(std::vector<double>& x_re_vec, std::vector<double>& x_im_vec)
     double* odd_re = &odd_re_vec[0];
     double* odd_im = &odd_im_vec[0];
 
-    #pragma omp parallel for if(N>1000)
+//    #pragma omp parallel for if(N>1000)
     for (long i=0; i<N/2; i++) {//vectorised
         even_im[i] = x_im[2*i];
         even_re[i] = x_re[2*i];
@@ -123,17 +123,17 @@ void fft(std::vector<double>& x_re_vec, std::vector<double>& x_im_vec)
         odd_re[i]  = x_re[2*i+1];
     }
 	// conquer
-    #pragma omp task if(N>1000) shared(even_re_vec,even_im_vec)
+//    #pragma omp task if(N>1000) shared(even_re_vec,even_im_vec)
     {
         fft(even_re_vec, even_im_vec);
     }
-    #pragma omp task if(N>1000) shared(odd_re_vec,odd_im_vec)
+//    #pragma omp task if(N>1000) shared(odd_re_vec,odd_im_vec)
     {
         fft(odd_re_vec, odd_im_vec);
     }
     // combine
-    #pragma omp taskwait
-    #pragma omp parallel for if(N>1000)
+//    #pragma omp taskwait
+//    #pragma omp parallel for if(N>1000)
     for (long k = 0; k < N/2; k++) { //not vectorised: reason = cos and sin
         double theta = -2 * M_PI * k / N;
         double p_re = cos(theta);
@@ -251,9 +251,6 @@ DoubleVector propagator(std::vector<double> wave,
             for (long i=0; i < 2*nfreq; i++){ //vectorised
                 wave_spectral_re[i] -= mean_wave;
             }
-        }
-        #pragma omp single
-        {
             tstart1 = std::chrono::high_resolution_clock::now(); // start time (nano-seconds)
             // Fourier transform waveform to frequency domain
             fft(wave_spectral_re, wave_spectral_im);
@@ -270,10 +267,8 @@ DoubleVector propagator(std::vector<double> wave,
             U_re[i] = Y.real();
             U_im[i] = Y.imag();
         }
-    }
+        #pragma omp barrier
         // Compute seismogram
-    #pragma omp parallel
-    {
         #pragma omp for 
         for (long i=0; i < nfreq+1; i++) { //vectorised
         //(ac - bd) + i(ad + bc)
@@ -297,17 +292,23 @@ DoubleVector propagator(std::vector<double> wave,
             Upad_re[i] =Upad_re[i]*wave_spectral_re[i]-Upad_im[i]*wave_spectral_im[i];
             Upad_im[i] =Upad_re[i]*wave_spectral_im[i]+Upad_im[i]*wave_spectral_re[i];
         }
+        #pragma omp barrier
+        #pragma omp single
+        {
+            // Fourier transform back again
+            tstart2 = std::chrono::high_resolution_clock::now(); // start time (nano-seconds)
+            ifft(Upad_re, Upad_im);
+            tend2 = std::chrono::high_resolution_clock::now(); // end time (nano-seconds)
+        } 
+    //#pragma GCC ivdep
+        #pragma omp for
+        for (long i=0; i < nsamp; i++){ //vectorised
+            seismogram[i] = Upad_re[i];
+        }
+        
     }
     
-    // Fourier transform back again
-    tstart2 = std::chrono::high_resolution_clock::now(); // start time (nano-seconds)
-    ifft(Upad_re, Upad_im);
-    tend2 = std::chrono::high_resolution_clock::now(); // end time (nano-seconds)
 
-    #pragma GCC ivdep
-    for (long i=0; i < nsamp; i++){ //vectorised
-        seismogram[i] = Upad_re[i];
-    }
 
     auto tend = std::chrono::high_resolution_clock::now(); // end time (nano-seconds)
 
