@@ -123,16 +123,16 @@ void fft(std::vector<double>& x_re_vec, std::vector<double>& x_im_vec)
         odd_re[i]  = x_re[2*i+1];
     }
 	// conquer
-//    #pragma omp task if(N>1000) shared(even_re_vec,even_im_vec)
+    #pragma omp task if(N>1000) shared(even_re_vec,even_im_vec)
     {
         fft(even_re_vec, even_im_vec);
     }
-//    #pragma omp task if(N>1000) shared(odd_re_vec,odd_im_vec)
+    #pragma omp task if(N>1000) shared(odd_re_vec,odd_im_vec)
     {
         fft(odd_re_vec, odd_im_vec);
     }
     // combine
-//    #pragma omp taskwait
+    #pragma omp taskwait
 //    #pragma omp parallel for if(N>1000)
     for (long k = 0; k < N/2; k++) { //not vectorised: reason = cos and sin
         double theta = -2 * M_PI * k / N;
