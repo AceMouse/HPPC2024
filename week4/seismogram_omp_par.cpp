@@ -1,11 +1,3 @@
-/*
-  Assignment: Make an OpenMP parallelised wave propagation
-  model for computing the seismic repsonse for a wave
-  propagating through a horizontally stratified medium
-  Efficiency = Speedup/Number of cores
-  Does it make sense to do weak scaling? 
-  Should we filter out fft, or correct for it?
-*/
 #include <iostream>
 #include <fstream>
 #include <iomanip>
@@ -188,7 +180,7 @@ DoubleVector propagator(std::vector<double> wave,
         ref[i] = (imp[i+1] - imp[i])/(imp[i+1] + imp[i]);
 
     // Spectral window (both low- and high cut)
-    // should we parallelize or is it too small?
+    // too small to parallelize, at least for strong scaling
     for (long i=0; i < lc+1; i++)
         half_filter[i]= (sin(M_PI*(2*i-lc)/(2*lc)))/2+0.5;
 
