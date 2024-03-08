@@ -147,11 +147,12 @@ void simulate(const Sim_Configuration config) {
     std::vector <grid_t> water_history;
     auto begin = std::chrono::steady_clock::now();
 
-    #pragma acc data copyin(water_world) copy(water_history) 
+    #pragma acc data copyin(water_world)  
     {
     for (uint64_t t = 0; t < config.iter; ++t) {
         integrate(water_world, config.dt,  config.dx, config.dy, config.g);
         if (t % config.data_period == 0) {
+            #pragma acc update self(water_world.e)
             water_history.push_back(water_world.e);
         }
     }
