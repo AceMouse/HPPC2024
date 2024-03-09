@@ -1,0 +1,30 @@
+
+vector size: 1024
+num_gangs: 1
+checksum: 16471
+elapsed time: 2.25239 sec
+
+vector size: 1024
+num_gangs: 4
+checksum: 65884
+elapsed time: 2.74661 sec
+
+vector size: 1024
+num_gangs: 9
+checksum: 148239
+elapsed time: 3.40505 sec
+
+vector size: 1024
+num_gangs: 16
+checksum: 263536
+elapsed time: 5.1745 sec
+
+vector size: 1024
+num_gangs: 25
+checksum: 411775
+elapsed time: 7.7081 sec
+
+vector size: 1024
+num_gangs: 36
+checksum: 592956
+elapsed time: 11.7946 sec

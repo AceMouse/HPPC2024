@@ -1,0 +1,41 @@
+
+vector size: 256
+num_gangs: 1
+checksum: 16471
+elapsed time: 6.01676 sec
+
+vector size: 256
+num_gangs: 4
+checksum: 65884
+elapsed time: 6.94377 sec
+
+vector size: 256
+num_gangs: 9
+checksum: 148239
+elapsed time: 7.65664 sec
+
+vector size: 256
+num_gangs: 16
+checksum: 263536
+elapsed time: 9.36967 sec
+
+vector size: 256
+num_gangs: 25
+checksum: 411775
+elapsed time: 10.5716 sec
+
+vector size: 256
+num_gangs: 36
+checksum: 592956
+elapsed time: 12.9415 sec
+
+
+vector size: 256
+num_gangs: 49
+checksum: 807079
+elapsed time: 16.3287 sec
+
+vector size: 256
+num_gangs: 64
+checksum: 1.05414e+06
+elapsed time: 20.1115 sec

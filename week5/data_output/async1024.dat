@@ -1,0 +1,55 @@
+
+vector size: 1024
+num_gangs: 1
+checksum: 263536
+elapsed time: 31.3238 sec
+
+vector size: 1024
+num_gangs: 2
+checksum: 263536
+elapsed time: 17.1576 sec
+
+vector size: 1024
+num_gangs: 4
+checksum: 263536
+elapsed time: 9.93477 sec
+
+vector size: 1024
+num_gangs: 6
+checksum: 263536
+elapsed time: 7.25457 sec
+
+vector size: 1024
+num_gangs: 8
+checksum: 263536
+elapsed time: 6.05602 sec
+
+vector size: 1024
+num_gangs: 10
+checksum: 263536
+elapsed time: 5.41489 sec
+
+vector size: 1024
+num_gangs: 12
+checksum: 263536
+elapsed time: 5.08298 sec
+
+vector size: 1024
+num_gangs: 14
+checksum: 263536
+elapsed time: 4.89814 sec
+
+vector size: 1024
+num_gangs: 28
+checksum: 263536
+elapsed time: 4.97862 sec
+
+vector size: 1024
+num_gangs: 42
+checksum: 263536
+elapsed time: 5.10213 sec
+
+vector size: 1024
+num_gangs: 56
+checksum: 263536
+elapsed time: 4.96124 sec
