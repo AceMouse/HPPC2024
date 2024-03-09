@@ -9,7 +9,7 @@
 #include <algorithm>
 
 using real_t = float;
-constexpr size_t NX = 2*1024, NY = 2*1024; //World Size
+constexpr size_t NX = 4*1024, NY = 4*1024; //World Size
 using grid_t = std::array<std::array<real_t, NX>, NY>;
 
 class Sim_Configuration {
