@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 #SBATCH --job-name=FWC
 #SBATCH --partition=modi_HPPC
-#SBATCH --nodes=1
-#SBATCH --ntasks=1
-##SBATCH --exclusive
+#SBATCH --nodes=1 --ntasks=1 --threads-per-core=1
+#SBATCH --cpus-per-task=1
+#SBATCH --exclusive
 
 mpiexec apptainer exec \
    ~/modi_images/ucphhpc/hpc-notebook:latest \
