@@ -115,20 +115,18 @@ void exchange_ghost_cells(World &world) {
     double recv_down[world.longitude-2] = {0};
 
     MPI_Isend(&send_left, world.latitude - 2, MPI_DOUBLE, world.neighb[0], 0, MPI_COMM_WORLD, &request[0]);
-    MPI_Irecv(&recv_right, world.latitude - 2, MPI_DOUBLE, world.neighb[1], 0, MPI_COMM_WORLD, &request[1]);
-    MPI_Waitall(2, &request[0], MPI_STATUS_IGNORE);
+    MPI_Irecv(&recv_right, world.latitude - 2, MPI_DOUBLE, world.neighb[1], 0, MPI_COMM_WORLD, &request[4]);
 
-    MPI_Isend(&send_right, world.latitude - 2, MPI_DOUBLE, world.neighb[1], 1, MPI_COMM_WORLD, &request[2]);
-    MPI_Irecv(&recv_left, world.latitude - 2, MPI_DOUBLE, world.neighb[0], 1, MPI_COMM_WORLD, &request[3]);
-    MPI_Waitall(2, &request[2], MPI_STATUS_IGNORE);
+    MPI_Isend(&send_right, world.latitude - 2, MPI_DOUBLE, world.neighb[1], 1, MPI_COMM_WORLD, &request[1]);
+    MPI_Irecv(&recv_left, world.latitude - 2, MPI_DOUBLE, world.neighb[0], 1, MPI_COMM_WORLD, &request[5]);
 
-    MPI_Isend(&send_up, world.longitude - 2, MPI_DOUBLE, world.neighb[2], 2, MPI_COMM_WORLD, &request[4]);
-    MPI_Irecv(&recv_down, world.longitude - 2, MPI_DOUBLE, world.neighb[3], 2, MPI_COMM_WORLD, &request[5]);
-    MPI_Waitall(2, &request[4], MPI_STATUS_IGNORE);
+    MPI_Isend(&send_up, world.longitude - 2, MPI_DOUBLE, world.neighb[2], 2, MPI_COMM_WORLD, &request[2]);
+    MPI_Irecv(&recv_down, world.longitude - 2, MPI_DOUBLE, world.neighb[3], 2, MPI_COMM_WORLD, &request[6]);
 
-    MPI_Isend(&send_down, world.longitude - 2, MPI_DOUBLE, world.neighb[3], 3, MPI_COMM_WORLD, &request[6]);
+    MPI_Isend(&send_down, world.longitude - 2, MPI_DOUBLE, world.neighb[3], 3, MPI_COMM_WORLD, &request[3]);
     MPI_Irecv(&recv_up, world.longitude - 2, MPI_DOUBLE, world.neighb[2], 3, MPI_COMM_WORLD, &request[7]);
-    MPI_Waitall(2, &request[6], MPI_STATUS_IGNORE);
+    
+    MPI_Waitall(4, &request[4], MPI_STATUS_IGNORE);
     for (uint64_t i = 0; i < world.latitude-2; ++i) {
         world.data[(i+1)*world.longitude + 0] = recv_left[i];
         world.data[(i+1)*world.longitude + world.longitude-1] = recv_right[i];
