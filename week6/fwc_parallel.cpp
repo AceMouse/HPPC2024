@@ -9,14 +9,14 @@
 #include <cassert>
 
 // Get the number of processes
-// We only expect 2^n processes, no uneven numbers apart from 1
+// We only expect 2^n processes
 int mpi_size; 
 
 // Get the rank of the process
 int mpi_rank;
 
 // Set world decomposition dimensionality
-const int ndims = 2; // don't change this right now
+const int ndims = 2;
 
 /** Representation of a flat world */
 class World {
@@ -287,10 +287,8 @@ void simulate(uint64_t num_of_iterations, const std::string& model_filename, con
 
     // save arr with [n_world_rows, n_world_cols]
     int world_splits[2] = {(int)global_world.latitude/(int)temp_lat, (int)global_world.longitude/(int)temp_long};
-
-    //std::cout << " world splits " << world_splits[0] << " " << world_splits[1] << std::endl;
     
-// init 2D comm world with chosen decomposition, even if ndims == 1
+    // init 2D comm world with chosen decomposition, even if ndims == 1
     MPI_Comm comm2D; int dims[2]={world_splits[1], world_splits[0]}; int per[2]={1,1}; int reorder=0;
     MPI_Cart_create(MPI_COMM_WORLD, 2, dims, per, reorder, &comm2D);
 
@@ -300,8 +298,6 @@ void simulate(uint64_t num_of_iterations, const std::string& model_filename, con
     const uint64_t latitude  = temp_lat + 2;
     const long int offset_longitude = std::floor(mpi_rank/world_splits[0])*temp_long -1; 
     const long int offset_latitude  = (mpi_rank%world_splits[0])*temp_lat - 1;
-    
-    //std::cout << "Rank " << mpi_rank << " out of " << mpi_size << " temp_longitude: " << temp_long << " offset_longitude: " << offset_longitude << " temp_latitude: " << temp_lat << " offset_latitude: " << offset_latitude << std::endl;
 
     // copy over albedo data to local world data
     std::vector<double> albedo(longitude*latitude);
@@ -323,8 +319,6 @@ void simulate(uint64_t num_of_iterations, const std::string& model_filename, con
     for(int dir = 0; dir < 2; dir++) {
         MPI_Cart_shift(comm2D, dir, 1, &world.neighb[2*dir], &world.neighb[2*dir+1]);
     }
-
-    //std::cout << "rank " << mpi_rank << " neighb " << world.neighb[0] << " " << world.neighb[1] << " " << world.neighb[2] << " " << world.neighb[3] << " " << std::endl;
     
     // set up counters and loop for num_iterations of integration steps
     const double delta_time = world.global_longitude / 36.0;
@@ -341,7 +335,6 @@ void simulate(uint64_t num_of_iterations, const std::string& model_filename, con
 
         // DONE: gather the Temperature on rank zero
         // remove ghostzones and construct global data from local data
-
         MPI_Gather(world.data.data(), longitude*latitude , MPI_DOUBLE, rbuf.data(), longitude*latitude, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
         if (mpi_rank == 0) {
